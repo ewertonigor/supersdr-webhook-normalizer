@@ -32,6 +32,8 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=builder --chown=app:app /app/node_modules ./node_modules
 COPY --from=builder --chown=app:app /app/dist ./dist
 COPY --from=builder --chown=app:app /app/package.json ./package.json
+# Drizzle migrations are .sql + meta/*.json — not picked up by tsc, copy raw.
+COPY --from=builder --chown=app:app /app/src/db/migrations ./dist/db/migrations
 
 USER app
 
