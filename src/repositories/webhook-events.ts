@@ -1,4 +1,4 @@
-import { and, eq, lt, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import { webhookEvents, type WebhookEvent } from "../db/schema.js";
 
@@ -29,23 +29,26 @@ export async function insertReceived(
  * (defensive — we currently run a single worker, but safe to scale up).
  */
 export async function claimPendingBatch(db: Db, batchSize: number): Promise<WebhookEvent[]> {
+  // Use the Drizzle query builder so the snake_case → camelCase mapping
+  // happens automatically (raw tx.execute returns snake_case keys).
   return db.transaction(async (tx) => {
-    const rows = await tx.execute<WebhookEvent>(sql`
-      SELECT * FROM webhook_events
-      WHERE status IN ('received', 'failed')
-      ORDER BY received_at ASC
-      LIMIT ${batchSize}
-      FOR UPDATE SKIP LOCKED
-    `);
-    if (rows.rows.length === 0) return [];
+    const rows = await tx
+      .select()
+      .from(webhookEvents)
+      .where(sql`status IN ('received', 'failed')`)
+      .orderBy(webhookEvents.receivedAt)
+      .limit(batchSize)
+      .for("update", { skipLocked: true });
 
-    const ids = rows.rows.map((r) => r.id);
+    if (rows.length === 0) return [];
+
+    const ids = rows.map((r) => r.id);
     await tx
       .update(webhookEvents)
       .set({ status: "processing", attempts: sql`${webhookEvents.attempts} + 1` })
-      .where(sql`id = ANY(${ids})`);
+      .where(inArray(webhookEvents.id, ids));
 
-    return rows.rows;
+    return rows;
   });
 }
 
