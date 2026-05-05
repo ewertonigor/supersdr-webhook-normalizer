@@ -8,8 +8,11 @@
 
 ## Links rápidos
 
-- 🔌 **Endpoint público (VPS):** `http://<ip-da-vps>/webhooks/<provider>` (após deploy — ver `deploy/HOSTINGER_SETUP.md`)
-- 📦 **Repositório:** este
+- 🔌 **API pública:** https://supersdr-webhook-normalizer.fly.dev (Fly.io · região `gru`)
+  - `GET  /health` → status + providers registrados
+  - `POST /webhooks/:provider` → meta · evolution · zapi
+  - `GET  /webhooks/_metrics` → contagem de eventos por status
+- 📦 **Repositório:** https://github.com/ewertonigor/supersdr-webhook-normalizer
 - 🎥 **Vídeo demo (≤ 10 min):** _adicionar link aqui após gravação_
 - 📐 **Arquitetura detalhada:** [ARCHITECTURE.md](./ARCHITECTURE.md)
 - 🧪 **Postman collection:** [postman-collection.json](./postman-collection.json)
@@ -50,7 +53,8 @@ Cada mensagem ganha uma **classificação de intenção** via OpenAI (`gpt-4o-mi
 | Banco | PostgreSQL 16 |
 | LLM | OpenAI `gpt-4o-mini` com structured output (`response_format: json_schema`) |
 | Tests | Vitest |
-| Deploy | Docker Compose + nginx + Hostinger VPS |
+| Deploy | Fly.io (machine + Postgres em `gru`) — [`fly.toml`](./fly.toml) |
+| Deploy alternativo | Docker Compose + nginx + Hostinger VPS — [`deploy/`](./deploy/) |
 
 ---
 
@@ -208,7 +212,7 @@ Veja `.env.example` para a lista canônica. Resumo:
 
 | Var | Obrigatória | Default |
 | --- | --- | --- |
-| `DATABASE_URL` | sim | `postgresql://supersdr:supersdr@localhost:5432/supersdr` (em compose) |
+| `DATABASE_URL` | sim | `postgresql://supersdr:supersdr@localhost:5433/supersdr` (compose expõe Postgres em 5433 para evitar colisão com Postgres locais) |
 | `OPENAI_API_KEY` | **sim** | — (servidor crasha no boot se ausente) |
 | `OPENAI_MODEL` | não | `gpt-4o-mini` |
 | `PORT` | não | `3000` |
@@ -220,25 +224,45 @@ Veja `.env.example` para a lista canônica. Resumo:
 
 ---
 
-## Deploy em produção (Hostinger VPS)
+## Deploy em produção
 
-Passo a passo completo em [`deploy/HOSTINGER_SETUP.md`](./deploy/HOSTINGER_SETUP.md). Resumo:
+### Fly.io (deploy ativo)
 
-1. Conectar repo GitHub na integração Docker da Hostinger
-2. Definir env vars no painel (incluindo `OPENAI_API_KEY`)
-3. Hostinger faz `docker compose up -d --build` em cada push em `main`
-4. Aplicar nginx reverse proxy com `deploy/nginx.conf`
-5. Rodar migrations uma vez (`docker compose run --rm app node dist/db/migrate.js`)
+A aplicação roda em https://supersdr-webhook-normalizer.fly.dev (região `gru`, São Paulo).
 
-URL pública: `http://<ip-da-vps>/webhooks/<provider>`
+Configuração versionada em [`fly.toml`](./fly.toml):
+
+- 1 app + 2 machines (high availability, sem cold-start)
+- Postgres gerenciado pelo Fly (cluster `supersdr-db`, mesma região)
+- HTTPS automático via Let's Encrypt
+- `release_command` aplica migrations + seed em cada deploy
+- Healthcheck no `/health` a cada 30s
+
+Reproduzir o deploy do zero (CLI):
+
+```bash
+flyctl auth login
+flyctl apps create supersdr-webhook-normalizer
+flyctl postgres create --name supersdr-db --region gru \
+  --vm-size shared-cpu-1x --initial-cluster-size 1 --volume-size 1
+flyctl postgres attach supersdr-db --app supersdr-webhook-normalizer
+flyctl secrets set OPENAI_API_KEY=sk-... --app supersdr-webhook-normalizer
+flyctl deploy --app supersdr-webhook-normalizer
+```
+
+### Hostinger VPS (alternativa documentada)
+
+Mesmo container roda em qualquer Docker host. O guia para Hostinger VPS via integração Docker + nginx está em [`deploy/HOSTINGER_SETUP.md`](./deploy/HOSTINGER_SETUP.md). O `docker-compose.yml` da raiz é a base de ambos os caminhos.
 
 ### Z-API trial (validação ponta-a-ponta)
 
 1. Crie conta gratuita em <https://z-api.io>
 2. Pareie uma instância via QR code
-3. Em **Webhook → Recebimentos**, aponte para `http://<ip-da-vps>/webhooks/zapi`
-4. Envie uma mensagem de WhatsApp para o número
-5. Em ~2 segundos a mensagem aparece em `messages` com `intent` classificado
+3. Em **Webhook → Recebimentos**, aponte para `https://supersdr-webhook-normalizer.fly.dev/webhooks/zapi`
+4. Envie uma mensagem de WhatsApp para o número pareado (de outro número)
+5. Em ~2 segundos a mensagem aparece em `messages` com `intent` classificado pela OpenAI
+
+**Validado em produção** com mensagens reais — texto curto (`saudacao`), pergunta ambígua (`outro` com confidence baixo), imagem com legenda promocional (`spam`). O adapter Z-API processa todos os tipos cobertos pelo schema (`text`, `image`, `audio`, `video`, `document`, `location`).
 
 ---
 
