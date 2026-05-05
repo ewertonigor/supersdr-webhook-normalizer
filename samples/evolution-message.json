@@ -1,0 +1,22 @@
+{
+  "event": "messages.upsert",
+  "instance": "minha-instancia",
+  "data": {
+    "key": {
+      "remoteJid": "5511977777777@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0EVOLUTIONXYZ"
+    },
+    "pushName": "Maria Souza",
+    "message": {
+      "conversation": "Bom dia, recebi uma mensagem da equipe e queria agendar uma demo essa semana."
+    },
+    "messageType": "conversation",
+    "messageTimestamp": 1715000000
+  },
+  "destination": "5511999999999@s.whatsapp.net",
+  "date_time": "2024-05-06T13:33:20.000Z",
+  "sender": "5511977777777@s.whatsapp.net",
+  "server_url": "https://sua-evolution-api.com",
+  "apikey": "REDACTED"
+}

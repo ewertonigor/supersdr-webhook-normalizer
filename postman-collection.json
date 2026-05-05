@@ -1,0 +1,109 @@
+{
+  "info": {
+    "name": "SuperSDR — Webhook Normalizer",
+    "description": "Coleção para testar o sistema de normalização de webhooks. Aponte {{baseUrl}} para http://localhost:3000 (dev) ou http://<ip-da-vps> (prod).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Webhooks: metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/webhooks/_metrics",
+          "host": ["{{baseUrl}}"],
+          "path": ["webhooks", "_metrics"]
+        }
+      }
+    },
+    {
+      "name": "POST Meta webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"object\": \"whatsapp_business_account\",\n  \"entry\": [\n    {\n      \"id\": \"WHATSAPP_BUSINESS_ACCOUNT_ID\",\n      \"changes\": [\n        {\n          \"value\": {\n            \"messaging_product\": \"whatsapp\",\n            \"metadata\": { \"display_phone_number\": \"5511999999999\", \"phone_number_id\": \"PNID\" },\n            \"contacts\": [{ \"profile\": { \"name\": \"João Silva\" }, \"wa_id\": \"5511988888888\" }],\n            \"messages\": [{\n              \"from\": \"5511988888888\",\n              \"id\": \"wamid.POSTMAN_DEMO_1\",\n              \"timestamp\": \"1715000000\",\n              \"type\": \"text\",\n              \"text\": { \"body\": \"Oi! Vi o anúncio de vocês e queria saber o preço.\" }\n            }]\n          },\n          \"field\": \"messages\"\n        }\n      ]\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/webhooks/meta",
+          "host": ["{{baseUrl}}"],
+          "path": ["webhooks", "meta"]
+        }
+      }
+    },
+    {
+      "name": "POST Evolution webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event\": \"messages.upsert\",\n  \"instance\": \"minha-instancia\",\n  \"data\": {\n    \"key\": { \"remoteJid\": \"5511977777777@s.whatsapp.net\", \"fromMe\": false, \"id\": \"3EB0POSTMAN_EVOLUTION\" },\n    \"pushName\": \"Maria Souza\",\n    \"message\": { \"conversation\": \"Bom dia, queria agendar uma demo essa semana.\" },\n    \"messageType\": \"conversation\",\n    \"messageTimestamp\": 1715000000\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/webhooks/evolution",
+          "host": ["{{baseUrl}}"],
+          "path": ["webhooks", "evolution"]
+        }
+      }
+    },
+    {
+      "name": "POST Z-API webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"instanceId\": \"INSTANCE_ID\",\n  \"messageId\": \"3EB0POSTMAN_ZAPI\",\n  \"phone\": \"5511966666666\",\n  \"fromMe\": false,\n  \"momment\": 1715000000000,\n  \"status\": \"RECEIVED\",\n  \"chatName\": \"Carlos Pereira\",\n  \"senderName\": \"Carlos Pereira\",\n  \"type\": \"ReceivedCallback\",\n  \"text\": { \"message\": \"Já sou cliente e estou tendo problemas pra acessar o painel.\" }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/webhooks/zapi",
+          "host": ["{{baseUrl}}"],
+          "path": ["webhooks", "zapi"]
+        }
+      }
+    },
+    {
+      "name": "POST Unknown provider (404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"foo\":\"bar\"}" },
+        "url": {
+          "raw": "{{baseUrl}}/webhooks/twilio",
+          "host": ["{{baseUrl}}"],
+          "path": ["webhooks", "twilio"]
+        }
+      }
+    }
+  ]
+}

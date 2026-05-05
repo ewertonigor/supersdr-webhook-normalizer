@@ -1,0 +1,17 @@
+{
+  "instanceId": "INSTANCE_ID",
+  "messageId": "3EB0ZAPIDEMOABC",
+  "phone": "5511966666666",
+  "fromMe": false,
+  "momment": 1715000000000,
+  "status": "RECEIVED",
+  "chatName": "Carlos Pereira",
+  "senderPhoto": "https://pps.whatsapp.net/...",
+  "senderName": "Carlos Pereira",
+  "participantPhone": null,
+  "broadcast": false,
+  "type": "ReceivedCallback",
+  "text": {
+    "message": "Já sou cliente e estou tendo problemas pra acessar o painel hoje. Conseguem me ajudar?"
+  }
+}
