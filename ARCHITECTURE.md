@@ -5,37 +5,105 @@
 ## Diagrama de fluxo
 
 ```mermaid
-flowchart LR
-    subgraph "Provedores externos"
-        Meta["Meta Cloud API"]
-        Evo["Evolution API"]
-        ZApi["Z-API"]
+%%{init: {'flowchart': {'curve': 'basis', 'padding': 14}}}%%
+flowchart TD
+    %% ── Provedores externos ──────────────────────────────────────────────
+    subgraph providers["🌐 Provedores externos"]
+        direction LR
+        Meta["`**Meta**
+        Cloud API`"]:::provider
+        Evo["`**Evolution**
+        API`"]:::provider
+        ZApi["`**Z-API**`"]:::provider
     end
 
-    Meta -- POST /webhooks/meta --> NGINX
-    Evo  -- POST /webhooks/evolution --> NGINX
-    ZApi -- POST /webhooks/zapi --> NGINX
+    Meta  -->|"POST /webhooks/meta"| Fastify
+    Evo   -->|"POST /webhooks/evolution"| Fastify
+    ZApi  -->|"POST /webhooks/zapi"| Fastify
 
-    NGINX[/"nginx :80"/] --> Routes[/"Fastify routes"/]
-    Routes --> Handler["webhook handler\n(persiste raw + 202)"]
-    Handler --> WET["webhook_events\n(status='received')"]
-    Handler -. ack 202 .-> Provedor
-
-    subgraph "background"
-        Loop["WebhookProcessor\nclaim FOR UPDATE SKIP LOCKED"]
-        Loop --> Adapter["adapter.normalize()\nResult<T,E>"]
-        Adapter --> Repos["repositories\n(contacts + messages)\nidempotent"]
-        Repos --> Msg["messages\n(UNIQUE provider+external)"]
-        Msg --> LLM["intent-classifier\nOpenAI structured output"]
-        LLM --> SetIntent["UPDATE messages\nSET intent, confidence"]
+    %% ── HTTP / Ingestão ──────────────────────────────────────────────────
+    subgraph ingest["🚀 Ingestão (síncrono · < 50 ms)"]
+        Fastify(["`Fastify route
+        **POST /webhooks/:provider**`"]):::http
+        Handler["`**handler**
+        valida slug · persiste raw`"]:::http
+        Fastify --> Handler
     end
 
-    WET -.poll a cada 2s.-> Loop
+    Handler ==>|"INSERT status=received"| WET[("`**webhook_events**
+    inbox · auditável · raw`")]:::db
+    Handler -.->|"202 Accepted"| Meta
+    Handler -.->|"202 Accepted"| Evo
+    Handler -.->|"202 Accepted"| ZApi
 
-    Adapter -- "schema_invalid /\nunknown_event" --> DLQ["webhook_events\nstatus='dead_letter'"]
-    Loop -- "transient (DB/LLM)" --> Failed["webhook_events\nstatus='failed'\nattempts++"]
-    Failed -. "attempts >= 3" .-> DLQ
+    %% ── Worker async ────────────────────────────────────────────────────
+    subgraph worker["⚙️ Worker async (poll a cada 2 s)"]
+        Claim["`**claim batch**
+        FOR UPDATE SKIP LOCKED`"]:::worker
+        Adapter{{"`**registry.resolve(slug)**
+        adapter.normalize()
+        ↪ Result&lt;T, E&gt;`"}}:::worker
+        Persist["`**repositories**
+        upsert contact · insert idempotent`"]:::worker
+        Claim --> Adapter --> Persist
+    end
+
+    WET -.->|"polling"| Claim
+
+    Persist ==>|"UNIQUE (provider_id, external_id)"| MSG[("`**messages**
+    schema único · normalizado`")]:::db
+    MSG -->|"WHERE intent IS NULL"| LLM
+
+    %% ── LLM ─────────────────────────────────────────────────────────────
+    subgraph ai["🤖 Classificação de intenção (best-effort)"]
+        LLM["`**OpenAI gpt-4o-mini**
+        response_format = json_schema (Zod)`"]:::ai
+    end
+
+    LLM -->|"UPDATE intent, confidence"| MSG
+    Persist ==>|"OK"| Done(["`✓ **markNormalized**`"]):::ok
+
+    %% ── DLQ / Resiliência ────────────────────────────────────────────────
+    subgraph dlq["⚠️ Resiliência · DLQ"]
+        direction TB
+        Failed["`**status = 'failed'**
+        attempts++`"]:::warn
+        DLQ["`**status = 'dead_letter'**
+        replay manual`"]:::error
+        Failed -. "attempts ≥ MAX (3)" .-> DLQ
+    end
+
+    Adapter -. "schema_invalid · unknown_event<br/>(permanente)" .-> DLQ
+    Persist -. "DB falhou (transiente)" .-> Failed
+    LLM -. "rate-limit / timeout" .-> Failed
+
+    %% ── Estilos ──────────────────────────────────────────────────────────
+    classDef provider fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b
+    classDef http     fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
+    classDef worker   fill:#fef3c7,stroke:#ca8a04,stroke-width:2px,color:#713f12
+    classDef ai       fill:#fae8ff,stroke:#a21caf,stroke-width:2px,color:#581c87
+    classDef db       fill:#f1f5f9,stroke:#475569,stroke-width:2px,color:#0f172a
+    classDef ok       fill:#d1fae5,stroke:#059669,stroke-width:2px,color:#064e3b
+    classDef warn     fill:#fed7aa,stroke:#ea580c,stroke-width:2px,color:#7c2d12
+    classDef error    fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#7f1d1d
+
+    style providers fill:#fafafa,stroke:#a1a1aa,stroke-dasharray:4 4
+    style ingest    fill:#f0fdf4,stroke:#16a34a,stroke-dasharray:4 4
+    style worker    fill:#fffbeb,stroke:#ca8a04,stroke-dasharray:4 4
+    style ai        fill:#fdf4ff,stroke:#a21caf,stroke-dasharray:4 4
+    style dlq       fill:#fef2f2,stroke:#dc2626,stroke-dasharray:4 4
+
+    %% Linhas grossas (===) destacam o caminho feliz; pontilhadas (-..) são async/erro
+    linkStyle default stroke-width:1.5px
 ```
+
+> 💡 **Como ler o diagrama:**
+> - **Caixas verdes** = camada HTTP síncrona (responde em <50ms).
+> - **Caixas amarelas** = worker async (drena `webhook_events` em background).
+> - **Caixa roxa** = chamada à OpenAI (best-effort — falhar aqui não bloqueia o pipeline).
+> - **Cilindros cinzas** = tabelas Postgres.
+> - **Caixas vermelhas/laranjas** = caminhos de erro (retry com backoff e DLQ).
+> - **Setas pontilhadas** = comunicação assíncrona (poll, ack, retry).
 
 ## Patterns aplicados
 
