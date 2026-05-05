@@ -1,0 +1,54 @@
+# fly.toml — Fly.io app configuration for SuperSDR
+# https://fly.io/docs/reference/configuration/
+
+app = "supersdr-webhook"
+primary_region = "gru"  # São Paulo — closest region for BR-based providers
+
+# Build the docker image directly from our Dockerfile.
+[build]
+  dockerfile = "Dockerfile"
+
+# Run pending migrations + seed providers on every deploy, before the new
+# machines start serving traffic. If this command fails the deploy aborts.
+[deploy]
+  release_command = "node dist/db/migrate.js"
+
+# Default env (non-secrets only — OPENAI_API_KEY goes via `flyctl secrets set`).
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+  LOG_LEVEL = "info"
+  OPENAI_MODEL = "gpt-4o-mini"
+  WORKER_POLL_INTERVAL_MS = "2000"
+  WORKER_BATCH_SIZE = "10"
+  WORKER_MAX_ATTEMPTS = "3"
+
+# HTTP service — Fly auto-handles HTTPS (Let's Encrypt) on the default
+# https://<app>.fly.dev hostname.
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "off"     # webhooks must be reachable 24/7
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+  # Health check — same endpoint our Dockerfile exposes.
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+# VM — small but enough for our workload (Fastify + 1 worker + LLM I/O).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
