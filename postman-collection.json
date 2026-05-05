@@ -1,14 +1,15 @@
 {
   "info": {
     "name": "SuperSDR — Webhook Normalizer",
-    "description": "Coleção para testar o sistema de normalização de webhooks. Aponte {{baseUrl}} para http://localhost:3000 (dev) ou http://<ip-da-vps> (prod).",
+    "description": "Coleção para testar o sistema de normalização de webhooks. {{baseUrl}} aponta para a app em produção (Fly.io) por padrão. Para testes locais, troque para http://localhost:3000.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000",
-      "type": "string"
+      "value": "https://supersdr-webhook-normalizer.fly.dev",
+      "type": "string",
+      "description": "URL base. Produção: https://supersdr-webhook-normalizer.fly.dev — Local: http://localhost:3000"
     }
   ],
   "item": [
