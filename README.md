@@ -16,7 +16,7 @@
   - `GET  /messages/stats` → agregados por provider e por intent
   - `GET  /messages/:id` → detalhe completo (inclui `raw_payload`)
 - 📦 **Repositório:** https://github.com/ewertonigor/supersdr-webhook-normalizer
-- 🎥 **Vídeo demo (≤ 10 min):** _adicionar link aqui após gravação_
+- 🎥 **Vídeo demo (≤ 10 min):** https://youtu.be/BQQWycw5Y50
 - 📐 **Arquitetura detalhada:** [ARCHITECTURE.md](./ARCHITECTURE.md)
 - 🧪 **Postman collection:** [postman-collection.json](./postman-collection.json)
 
