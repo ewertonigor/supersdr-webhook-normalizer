@@ -11,7 +11,10 @@
 - 🔌 **API pública:** https://supersdr-webhook-normalizer.fly.dev (Fly.io · região `gru`)
   - `GET  /health` → status + providers registrados
   - `POST /webhooks/:provider` → meta · evolution · zapi
-  - `GET  /webhooks/_metrics` → contagem de eventos por status
+  - `GET  /webhooks/_metrics` → contagem de eventos por status (received / normalized / failed / dead_letter)
+  - `GET  /messages` → lista mensagens normalizadas com intent (filtros: `?provider=`, `?intent=`, `?limit=`)
+  - `GET  /messages/stats` → agregados por provider e por intent
+  - `GET  /messages/:id` → detalhe completo (inclui `raw_payload`)
 - 📦 **Repositório:** https://github.com/ewertonigor/supersdr-webhook-normalizer
 - 🎥 **Vídeo demo (≤ 10 min):** _adicionar link aqui após gravação_
 - 📐 **Arquitetura detalhada:** [ARCHITECTURE.md](./ARCHITECTURE.md)
@@ -180,17 +183,58 @@ A tabela `webhook_events` mantém o registro de tudo que entrou (cru), com `stat
 
 ## Endpoints
 
+### Webhook ingestion (escrita)
+
 | Método | Rota | Descrição |
 | --- | --- | --- |
-| `GET` | `/health` | Lista providers registrados + timestamp |
-| `GET` | `/webhooks/_metrics` | Contagem de eventos por status |
 | `POST` | `/webhooks/:provider` | Recebe webhook, persiste raw, retorna 202 |
+| `GET` | `/webhooks/_metrics` | Contagem de eventos por status |
 
-Códigos de resposta:
+Códigos de resposta do `POST /webhooks/:provider`:
 
 - `202 Accepted` — payload aceito, processamento em background
 - `400` — body não é JSON object
 - `404` — provider desconhecido (não registrado)
+
+### Messages (leitura)
+
+Endpoints de leitura sobre o resultado do pipeline (mensagens normalizadas + classificação LLM).
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `GET` | `/messages` | Lista as mensagens mais recentes (com contato + intent). Filtros: `?provider=meta\|evolution\|zapi`, `?intent=...`, `?limit=N` (1–200, default 20) |
+| `GET` | `/messages/stats` | Agregados: total, classificadas, pendentes, contagem por provider, contagem por intent (com `avg_confidence`) |
+| `GET` | `/messages/:id` | Detalhe completo (inclui `raw_payload` original do provider) |
+
+Exemplo de resposta `GET /messages?limit=3`:
+
+```json
+{
+  "count": 3,
+  "items": [
+    {
+      "id": "uuid",
+      "provider_id": "zapi",
+      "external_id": "3EB0...",
+      "contact": { "id": "uuid", "display_name": "João Silva", "phone_number": "5511..." },
+      "direction": "inbound",
+      "message_type": "text",
+      "content": "oi, quero saber o preço",
+      "intent": "interesse_comercial",
+      "intent_confidence": 0.92,
+      "intent_classified_at": "2026-05-05T17:09:14.000Z",
+      "occurred_at": "2026-05-05T17:09:12.000Z",
+      "received_at": "2026-05-05T17:09:13.000Z"
+    }
+  ]
+}
+```
+
+### Operacional
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `GET` | `/health` | Healthcheck (usado pelo Docker e Fly.io) |
 
 ---
 

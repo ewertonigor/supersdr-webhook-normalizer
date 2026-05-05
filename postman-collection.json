@@ -38,6 +38,50 @@
       }
     },
     {
+      "name": "Messages: list (recent)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "description": "Lista as mensagens normalizadas mais recentes, com intent classificada pelo LLM. Suporta filtros: ?provider=meta|evolution|zapi, ?intent=interesse_comercial, ?limit=20.",
+        "url": {
+          "raw": "{{baseUrl}}/messages?limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["messages"],
+          "query": [
+            { "key": "limit", "value": "20" },
+            { "key": "provider", "value": "zapi", "disabled": true },
+            { "key": "intent", "value": "interesse_comercial", "disabled": true }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Messages: stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "description": "Agregados: total, classificadas, pendentes, contagem por provider, contagem por intent (com confidence média).",
+        "url": {
+          "raw": "{{baseUrl}}/messages/stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["messages", "stats"]
+        }
+      }
+    },
+    {
+      "name": "Messages: detail by id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "description": "Detalhe completo de UMA mensagem, incluindo o raw_payload original do provider (auditoria + debug).",
+        "url": {
+          "raw": "{{baseUrl}}/messages/REPLACE_ME_WITH_UUID",
+          "host": ["{{baseUrl}}"],
+          "path": ["messages", "REPLACE_ME_WITH_UUID"]
+        }
+      }
+    },
+    {
       "name": "POST Meta webhook",
       "request": {
         "method": "POST",

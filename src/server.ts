@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { config } from "./config.js";
 import { getDb, getPool } from "./db/client.js";
 import "./providers/index.js"; // side-effect: registers all adapters
+import { messageRoutes } from "./messages/routes.js";
 import { registry } from "./providers/registry.js";
 import { webhookRoutes } from "./webhooks/routes.js";
 import { WebhookProcessor } from "./webhooks/processor.js";
@@ -29,6 +30,7 @@ async function buildServer() {
   }));
 
   await app.register(webhookRoutes);
+  await app.register(messageRoutes);
 
   return app;
 }

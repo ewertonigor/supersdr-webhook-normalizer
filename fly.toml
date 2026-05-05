@@ -1,7 +1,7 @@
 # fly.toml — Fly.io app configuration for SuperSDR
 # https://fly.io/docs/reference/configuration/
 
-app = "supersdr-webhook"
+app = "supersdr-webhook-normalizer"
 primary_region = "gru"  # São Paulo — closest region for BR-based providers
 
 # Build the docker image directly from our Dockerfile.

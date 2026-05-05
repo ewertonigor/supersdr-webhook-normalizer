@@ -1,6 +1,6 @@
-import { eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client.js";
-import { messages, type Message } from "../db/schema.js";
+import { contacts, messages, type Message } from "../db/schema.js";
 import type { NormalizedMessage } from "../providers/types.js";
 
 /**
@@ -59,4 +59,116 @@ export async function setIntent(
 
 export async function findUnclassified(db: Db, limit = 20): Promise<Message[]> {
   return db.select().from(messages).where(isNull(messages.intentClassifiedAt)).limit(limit);
+}
+
+// --- Read endpoints support ---
+
+export type MessageWithContact = Message & {
+  contactDisplayName: string | null;
+  contactPhoneNumber: string | null;
+};
+
+export async function listRecent(
+  db: Db,
+  args: { limit: number; providerId?: string; intent?: string },
+): Promise<MessageWithContact[]> {
+  const conditions = [];
+  if (args.providerId) conditions.push(eq(messages.providerId, args.providerId));
+  if (args.intent) conditions.push(eq(messages.intent, args.intent));
+
+  const rows = await db
+    .select({
+      id: messages.id,
+      providerId: messages.providerId,
+      externalId: messages.externalId,
+      contactId: messages.contactId,
+      direction: messages.direction,
+      messageType: messages.messageType,
+      content: messages.content,
+      rawPayload: messages.rawPayload,
+      occurredAt: messages.occurredAt,
+      receivedAt: messages.receivedAt,
+      intent: messages.intent,
+      intentConfidence: messages.intentConfidence,
+      intentClassifiedAt: messages.intentClassifiedAt,
+      contactDisplayName: contacts.displayName,
+      contactPhoneNumber: contacts.phoneNumber,
+    })
+    .from(messages)
+    .leftJoin(contacts, eq(messages.contactId, contacts.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(messages.receivedAt))
+    .limit(args.limit);
+
+  return rows as MessageWithContact[];
+}
+
+export async function findById(db: Db, id: string): Promise<MessageWithContact | null> {
+  const [row] = await db
+    .select({
+      id: messages.id,
+      providerId: messages.providerId,
+      externalId: messages.externalId,
+      contactId: messages.contactId,
+      direction: messages.direction,
+      messageType: messages.messageType,
+      content: messages.content,
+      rawPayload: messages.rawPayload,
+      occurredAt: messages.occurredAt,
+      receivedAt: messages.receivedAt,
+      intent: messages.intent,
+      intentConfidence: messages.intentConfidence,
+      intentClassifiedAt: messages.intentClassifiedAt,
+      contactDisplayName: contacts.displayName,
+      contactPhoneNumber: contacts.phoneNumber,
+    })
+    .from(messages)
+    .leftJoin(contacts, eq(messages.contactId, contacts.id))
+    .where(eq(messages.id, id))
+    .limit(1);
+  return (row as MessageWithContact | undefined) ?? null;
+}
+
+export type MessageStats = {
+  total: number;
+  classified: number;
+  pending: number;
+  byProvider: Array<{ providerId: string; count: number }>;
+  byIntent: Array<{ intent: string; count: number; avgConfidence: number }>;
+};
+
+export async function stats(db: Db): Promise<MessageStats> {
+  const [totals] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      classified: sql<number>`count(${messages.intent})::int`,
+    })
+    .from(messages);
+
+  const byProvider = await db
+    .select({
+      providerId: messages.providerId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(messages)
+    .groupBy(messages.providerId);
+
+  const byIntent = await db
+    .select({
+      intent: sql<string>`coalesce(${messages.intent}, 'unclassified')`,
+      count: sql<number>`count(*)::int`,
+      avgConfidence: sql<number>`coalesce(avg(${messages.intentConfidence})::float, 0)`,
+    })
+    .from(messages)
+    .groupBy(messages.intent);
+
+  const total = totals?.total ?? 0;
+  const classified = totals?.classified ?? 0;
+  return {
+    total,
+    classified,
+    pending: total - classified,
+    byProvider,
+    byIntent,
+  };
 }
